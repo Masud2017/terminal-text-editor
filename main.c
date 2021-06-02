@@ -31,6 +31,8 @@ enum editorKey {
   ARROW_RIGHT,
   ARROW_UP,
   ARROW_DOWN,
+  HOME_KEY,
+  END_KEY,
   PAGE_UP,
   PAGE_DOWN
 };
@@ -172,6 +174,16 @@ void editorProcessKeypress(struct termios term) {
 			exit(0);
 			break;
 			
+		case PAGE_UP:
+		case PAGE_DOWN:
+			{
+				int times = E.screenrows;
+				while (times--) {
+					editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_UP);
+				}
+			}
+			break;
+
 		case ARROW_UP:
 		case ARROW_DOWN:
 		case ARROW_LEFT:
