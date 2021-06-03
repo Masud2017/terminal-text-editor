@@ -4,17 +4,26 @@
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <stdlib.h>
 #include <termios.h>
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define KILO_VERSION "1.0.0.alpha"
 
+typedef struct erow {
+	int size;
+	char* chars;
+}erow;
+
 struct editorConfig {
 	int cx, cy;
 	int screenrows;
 	int screencols;
 	struct termios orig_termios;
+
+	int numrows;
+	erow row;
 };
 
 struct editorConfig E;
@@ -31,11 +40,24 @@ enum editorKey {
   ARROW_RIGHT,
   ARROW_UP,
   ARROW_DOWN,
+  DEL_KEY,
   HOME_KEY,
   END_KEY,
   PAGE_UP,
   PAGE_DOWN
 };
+
+/* File i/o */
+void editorOpen() {
+	char* line = "Hello, world";
+	ssize_t linelen = 13;
+
+	E.row.size = linelen;
+	E.row.chars = malloc(linelen + 1);
+	memcpy(E.row.chars,line,linelen);
+	E.row.chars[linelen] = '\0';
+	E.numrows = 1;
+}
 
 void editorMoveCursor(int key) {
 	switch(key) {
@@ -99,6 +121,8 @@ void die(const char* s) {
 void initEditor() {
 	E.cx = 0;
 	E.cy = 0;
+	E.numrows = 0;
+
 	if (getWindowSize(&E.screenrows,&E.screencols) == -1) die("getWindowSize");
 }
 
@@ -141,8 +165,13 @@ int editorReadKey() {
 				if (read(STDIN_FILENO,&seq[2],1) != 1) return '\x1b';
 				if (seq[2] == '~') {
 					switch(seq[1]) {
+						case '1': return HOME_KEY;
+						case '3': return DEL_KEY;
+						case '4': return END_KEY;
 						case '5': return PAGE_UP;
 						case '6': return PAGE_DOWN;
+						case '7': return HOME_KEY;
+						case '8': return END_KEY;
 					}
 				}
 			} else {
@@ -151,7 +180,14 @@ int editorReadKey() {
 					case 'B': return ARROW_DOWN;
 					case 'C': return ARROW_RIGHT;
 					case 'D': return ARROW_LEFT;
+					case 'H': return HOME_KEY;
+					case 'F': return END_KEY;
 				}
+			} 
+		} else if (seq[0] == 'O') {
+			switch (seq[1]) {
+				case 'H': return HOME_KEY;
+				case 'F': return END_KEY;
 			}
 		}
 
@@ -174,6 +210,13 @@ void editorProcessKeypress(struct termios term) {
 			exit(0);
 			break;
 			
+		case HOME_KEY:
+			E.cx = 0;
+			break;
+		case END_KEY:
+			E.cx = E.screencols - 1;
+			break;
+
 		case PAGE_UP:
 		case PAGE_DOWN:
 			{
@@ -212,14 +255,12 @@ void editorDrawRows(struct abuf* ab) {
 			abAppend(ab,welcome,welcomelen);
 
 		} else {
-//		write(STDOUT_FILENO,"~",1);
 			abAppend(ab,"~",1);
 		}
 
 		abAppend(ab,"\x1b[K",3);
 
 		if (y < E.screenrows - 1 ) {
-//			write(STDOUT_FILENO,"\r\n",2);
 			abAppend(ab,"\r\n",2);
 		}
 	}
@@ -252,29 +293,14 @@ int main() {
 
 	enableRawMode();
 	initEditor(); // geting the terminal width and height for render ~ in the editor
+	editorOpen();
+
 	char c;
-	// while (read(STDIN_FILENO,&c,1) == 1 && c != 'q') {
-	// 	if (iscntrl(c)) {
-	// 		printf("%d\r\n",c);
-	// 	} else {
-	// 		printf("%d ('%c')\r\n",c,c);
-	// 	}
-	// }
 
 	while (1) {
-		// char c = '\0';
-		// read(STDIN_FILENO,&c,1);
-
-		// if (iscntrl(c)) {
-		// 	printf("%d\r\n",c);
-		// } else {
-		// 	printf("%d ('%c')\r\n",c,c);
-		// }
-		// if (c == CTRL_KEY('q')) break;
 
 		editorRefreshScreen();
 		editorProcessKeypress(term);
 	}
-//	disableRawMode(term);	 // Right now I don't need this portion cause I am using editorProcessKeypress() function for that purpose
 	return 0;
 }
