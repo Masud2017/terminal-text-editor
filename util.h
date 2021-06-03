@@ -1,10 +1,16 @@
 #pragma once
 
-#include <termios.h>
 #include <string.h>
-#include <stdlib.h>
+#include <ctype.h>
+#include <sys/ioctl.h>
 #include <errno.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <stdlib.h>
+#include <termios.h>
 
+#define CRL_ALT(x) ((x) & 0x1f)
 
 struct global_config {
 	int screenrows;

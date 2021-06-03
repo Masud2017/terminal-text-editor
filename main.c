@@ -47,10 +47,37 @@ enum editorKey {
   PAGE_DOWN
 };
 
+void die(const char* s) {
+	write(STDOUT_FILENO,"\x1b[2j",4);
+	write(STDOUT_FILENO,"\x1b[H",3);
+	perror(s);
+	exit(1);
+}
+
 /* File i/o */
-void editorOpen() {
-	char* line = "Hello, world";
-	ssize_t linelen = 13;
+void editorOpen(char* fileName) {
+	FILE* fp = fopen(fileName,"r");
+
+	if (!fp) die("fopen");
+
+	char* line = NULL;
+	size_t linecap = 0;
+	ssize_t linelen;
+
+	linelen = getline(&line, &linecap,fp);
+
+	if (linelen != -1) {
+		while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+			linelen--;
+		E.row.size = linelen;
+		E.row.chars = malloc(linelen + 1);
+		memcpy (E.row.chars, line , linelen);
+		E.row.chars[linelen] = '\0';
+		E.numrows = 1;
+	}
+
+	free(line);
+	fclose(fp);
 
 	E.row.size = linelen;
 	E.row.chars = malloc(linelen + 1);
@@ -109,13 +136,6 @@ int getWindowSize(int *rows,int *cols) {
 		
 		return 0;
 	}
-}
-
-void die(const char* s) {
-	write(STDOUT_FILENO,"\x1b[2j",4);
-	write(STDOUT_FILENO,"\x1b[H",3);
-	perror(s);
-	exit(1);
 }
 
 void initEditor() {
@@ -240,22 +260,29 @@ void editorDrawRows(struct abuf* ab) {
 	int y;
 
 	for (y = 0; y < E.screenrows; y++) {
-		if ( y == E.screenrows / 3) {
-			char welcome[80];
-			int welcomelen = snprintf(welcome,sizeof(welcome), "Kilo editor -- version %s",KILO_VERSION);
-		
-			if (welcomelen  > E.screencols) welcomelen = E.screencols;
+		if (y >= E.numrows) {
+			if ( y == E.screenrows / 3) {
+				char welcome[80];
+				int welcomelen = snprintf(welcome,sizeof(welcome), "Kilo editor -- version %s",KILO_VERSION);
+			
+				if (welcomelen  > E.screencols) welcomelen = E.screencols;
 
-			int padding = (E.screencols - welcomelen ) / 2;
-			if (padding) {
+				int padding = (E.screencols - welcomelen ) / 2;
+				if (padding) {
+					abAppend(ab,"~",1);
+					padding--;
+				}
+				while (padding--) abAppend(ab," ",1);
+				abAppend(ab,welcome,welcomelen);
+
+			} else {
 				abAppend(ab,"~",1);
-				padding--;
 			}
-			while (padding--) abAppend(ab," ",1);
-			abAppend(ab,welcome,welcomelen);
 
 		} else {
-			abAppend(ab,"~",1);
+			int len = E.row.size;
+			if (len > E.screencols) len = E.screencols;
+			abAppend(ab,E.row.chars,len);
 		}
 
 		abAppend(ab,"\x1b[K",3);
@@ -287,13 +314,16 @@ void editorRefreshScreen() {
 	abFree(&ab);
 }
 
-int main() {
+int main(int argc, char** argv) {
 	struct termios term;
 	tcgetattr(STDIN_FILENO,&term);
 
 	enableRawMode();
 	initEditor(); // geting the terminal width and height for render ~ in the editor
-	editorOpen();
+
+	if (argc >= 2) {
+		editorOpen(argv[1]);
+	}
 
 	char c;
 
